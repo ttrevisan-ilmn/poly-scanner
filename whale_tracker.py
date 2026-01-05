@@ -265,6 +265,22 @@ class PolymarketTracker:
             # Calculate Metrics
             metrics = self._calculate_advanced_metrics(market_data)
             
+            # --- PHASE 2: Insider Finder Metrics ---
+            # A. WC/TX % (Wallet Creation to Trade Time Delta)
+            wallet_creation_ts = profile.get('wallet_creation_ts', 0)
+            wallet_age_hours = profile.get('age_hours', 999)
+            
+            if wallet_creation_ts > 0 and wallet_age_hours > 0:
+                # timeΔ = Current trade time - Wallet creation
+                time_delta_hours = (ts - wallet_creation_ts) / 3600
+                wc_tx_pct = (time_delta_hours / wallet_age_hours) * 100 if wallet_age_hours > 0 else 100
+            else:
+                wc_tx_pct = 100  # Default if data unavailable
+            
+            # B. Trade Concentration (This market's value / Total user volume)
+            total_user_vol = profile.get('total_user_volume', 0)
+            trade_concentration = (value_usd / total_user_vol * 100) if total_user_vol > 0 else 0
+            
             result_item = {
                 'time': time_str,
                 'market': market_data['title'],
@@ -282,11 +298,15 @@ class PolymarketTracker:
                 'vol_24h': float(market_data.get('volume24hr', 0)),
                 'liquidity': float(market_data.get('liquidityNum', 0)),
                 
-                # Metrics
+                # Phase 1 Metrics
                 'spread': metrics['spread'],
                 'urgency': metrics['urgency'],
                 'bias': metrics['bias'],
                 'liq_vol_ratio': metrics['liq_vol_ratio'],
+                
+                # Phase 2: Insider Metrics
+                'wc_tx_pct': wc_tx_pct,
+                'trade_concentration': trade_concentration,
                 
                 '_ts': ts,
                 'end_date': market_data.get('end_date'),
@@ -859,12 +879,30 @@ class PolymarketTracker:
             else:
                 age_formatted = f"{int(age_hours/24)}d"
             
+            # --- PHASE 2: Insider Finder Metrics ---
+            # Total User Volume (sum of all trade values)
+            total_user_volume = 0.0
+            for t in trades:
+                try:
+                    size = float(t.get('size', 0))
+                    price = float(t.get('price', 0))
+                    total_user_volume += (size * price)
+                except:
+                    pass
+            
+            # Wallet Creation Timestamp (earliest activity)
+            # Use the oldest trade timestamp as proxy for wallet creation
+            wallet_creation_ts = oldest_time_dt.timestamp() if oldest_time_dt else time.time()
+            
             return {
                 'is_fresh': is_fresh,
                 'age_formatted': age_formatted,
                 'win_rate': float(win_rate_val), # Float
                 'total_trades': trade_count,
-                'profitability_score': radar_score # Storing Radar Score here!
+                'profitability_score': radar_score, # Storing Radar Score here!
+                'total_user_volume': total_user_volume,
+                'wallet_creation_ts': wallet_creation_ts,
+                'age_hours': age_hours
             }
 
         except Exception as e:

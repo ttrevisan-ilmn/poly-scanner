@@ -50,7 +50,9 @@ class StreamlitTracker(whale_tracker.PolymarketTracker):
             "Age": profile_data.get('age_formatted', 'N/A'),
             "Urgency": market_data.get('metrics', {}).get('urgency', 0),
             "Bias": market_data.get('metrics', {}).get('bias', 0),
-            "Liq/Vol": market_data.get('metrics', {}).get('liq_vol_ratio', 0)
+            "Liq/Vol": market_data.get('metrics', {}).get('liq_vol_ratio', 0),
+            "WC/TX%": trade_data.get('wc_tx_pct', 100),
+            "Trade Conc.": trade_data.get('trade_concentration', 0)
         }
         
         # Append to session state (thread-safeish in Streamlit context usually requires care, 
@@ -185,6 +187,11 @@ with tab_live:
                     st.write(f"Outcome: {whale['Outcome']}")
                     st.write(f"User Age: {whale.get('Age', 'N/A')} (Fresh: {whale['New User']})")
                     st.write(f"🔥 Urgency: {whale.get('Urgency', 0):.0f}% | ⚖️ Bias: {whale.get('Bias', 0):.2f} | 🌊 Liq/Vol: {whale.get('Liq/Vol', 0):.2f}")
+                    # Insider Metrics
+                    wc_tx = whale.get('WC/TX%', 100)
+                    trade_conc = whale.get('Trade Conc.', 0)
+                    insider_flag = "🚨 INSTANT ACTION!" if wc_tx < 5 else ""
+                    st.write(f"⏱️ WC/TX: {wc_tx:.1f}% {insider_flag} | 🎯 Focus: {trade_conc:.0f}%")
                 st.markdown("---")
     else:
         st.write("No whales found yet. Waiting for big splashes... 🌊")
@@ -291,7 +298,9 @@ with tab_scan:
                                 "Age": processed_item['age'],
                                 "Urgency": processed_item.get('urgency', 0),
                                 "Bias": processed_item.get('bias', 0),
-                                "Liq/Vol": processed_item.get('liq_vol_ratio', 0)
+                                "Liq/Vol": processed_item.get('liq_vol_ratio', 0),
+                                "WC/TX%": processed_item.get('wc_tx_pct', 100),
+                                "Trade Conc.": processed_item.get('trade_concentration', 0)
                             })
                             
                     return results
@@ -363,6 +372,8 @@ with tab_scan:
                 "Urgency": st.column_config.ProgressColumn("Urgency 🔥", min_value=0, max_value=100, format="%.0f"),
                 "Bias": st.column_config.NumberColumn("Bias ⚖️", format="%.2f"),
                 "Liq/Vol": st.column_config.NumberColumn("Liq/Vol 🌊", format="%.2f"),
+                "WC/TX%": st.column_config.NumberColumn("WC/TX% ⏱️", format="%.1f%%", help="Wallet age when trade executed. <5% = Instant action!"),
+                "Trade Conc.": st.column_config.ProgressColumn("Focus 🎯", min_value=0, max_value=100, format="%.0f%%", help="% of user's total volume in this market"),
             },
             width='stretch',
             hide_index=True
