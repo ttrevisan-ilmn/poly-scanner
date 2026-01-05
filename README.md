@@ -23,7 +23,13 @@ A powerful real-time and historical scanner for finding large "Whale" trades on 
 
 ## Usage
 
-### 1. Live Monitor
+### 1. Web Dashboard (Recommended)
+Launch the interactive dashboard with Live Monitor, Historical Scanner, and Smart Money Radar.
+```bash
+python3 -m streamlit run app.py
+```
+
+### 2. Live Monitor (CLI)
 By default, this monitors for trades **> $6,000 USD** in real-time.
 ```bash
 python3 whale_tracker.py
