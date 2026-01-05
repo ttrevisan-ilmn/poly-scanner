@@ -389,7 +389,7 @@ with tab_db:
             top_whale_val = df_db['value'].max()
             
             m1, m2, m3 = st.columns(3)
-            m1.metric("Recorded Volume", f"${total_vol:,.0f}")
+            m1.metric("Total Alerts", len(df_db))
             m2.metric("Unique Markets", unique_mkts)
             m3.metric("Largest Record", f"${top_whale_val:,.0f}")
             

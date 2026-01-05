@@ -6,3 +6,4 @@ certifi
 streamlit
 plotly
 pandas
+watchdog
