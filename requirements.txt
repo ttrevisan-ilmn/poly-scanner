@@ -1,0 +1,8 @@
+requests
+websocket-client
+rich
+python-dateutil
+certifi
+streamlit
+plotly
+pandas
