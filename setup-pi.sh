@@ -120,9 +120,9 @@ chmod +x "$HOME/deploy-whale-tracker.sh"
 
 # Add to crontab if not already present
 (crontab -l 2>/dev/null | grep -q "deploy-whale-tracker.sh") || \
-(crontab -l 2>/dev/null; echo "*/5 * * * * $HOME/deploy-whale-tracker.sh") | crontab -
+(crontab -l 2>/dev/null; echo "0 2 * * * $HOME/deploy-whale-tracker.sh") | crontab -
 
-echo "Auto-deployment configured (checks every 5 minutes)."
+echo "Auto-deployment configured (runs daily at 2 AM)."
 
 ################################################################################
 # Step 6: Start the service
