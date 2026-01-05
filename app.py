@@ -129,7 +129,13 @@ with st.sidebar:
 
 st.title("Polymarket Whale Tracker 🐳")
 
-tab_live, tab_scan, tab_db, tab_smart = st.tabs(["📡 Live Monitor", "📜 Historical Scan", "💾 Database", "🧠 Smart Money"])
+tab_live, tab_scan, tab_db, tab_smart, tab_insider = st.tabs([
+    "📡 Live Monitor", 
+    "📜 Historical Scan", 
+    "💾 Database", 
+    "🧠 Smart Money",
+    "🕵️ Insider Finder"
+])
 
 # --- TAB 1: LIVE MONITOR ---
 with tab_live:
@@ -300,7 +306,8 @@ with tab_scan:
                                 "Bias": processed_item.get('bias', 0),
                                 "Liq/Vol": processed_item.get('liq_vol_ratio', 0),
                                 "WC/TX%": processed_item.get('wc_tx_pct', 100),
-                                "Trade Conc.": processed_item.get('trade_concentration', 0)
+                                "Trade Conc.": processed_item.get('trade_concentration', 0),
+                                "Radar Score": processed_item['profile'].get('profitability_score', 0)
                             })
                             
                     return results
@@ -508,3 +515,96 @@ with tab_smart:
                     st.warning("No recorded trades for this wallet in DB.")
             except Exception as e:
                 st.error(f"Error inspecting wallet: {e}")
+
+# --- TAB 5: INSIDER FINDER ---
+with tab_insider:
+    st.subheader("Insider Finder 🕵️")
+    st.info("""
+    **Detect suspicious trading patterns** using behavioral analytics.  
+    This tab filters Historical Scan results for "Perfect Trades" - wallets that act instantly on fresh information with focused conviction.
+    """)
+    
+    # Check if scan results exist
+    if not st.session_state.scan_results:
+        st.warning("⚠️ No scan data available. Run a Historical Scan first to populate this table.")
+    else:
+        # Convert to DataFrame for filtering
+        df_scan = pd.DataFrame(st.session_state.scan_results)
+        
+        # Defensive check: Ensure required columns exist
+        required_cols = ['WC/TX%', 'Trade Conc.', 'Radar Score']
+        missing_cols = [col for col in required_cols if col not in df_scan.columns]
+        
+        if missing_cols:
+            st.warning(f"⚠️ Missing metrics: {', '.join(missing_cols)}. Please run a fresh Historical Scan to populate all columns.")
+        else:
+            # Filter Controls
+            st.markdown("### 🎛️ Filter Controls")
+            col_f1, col_f2, col_f3 = st.columns(3)
+            
+            with col_f1:
+                max_wc_tx = st.slider(
+                    "Max WC/TX %", 
+                    min_value=0, 
+                    max_value=100, 
+                    value=5,
+                    help="Filter for wallets that acted within X% of their total age. <5% = Instant action!"
+                )
+            
+            with col_f2:
+                min_conc = st.slider(
+                    "Min Trade Concentration %",
+                    min_value=0,
+                    max_value=100,
+                    value=50,
+                    help="Filter for wallets with >X% of their volume in a single market (laser focus)"
+                )
+            
+            with col_f3:
+                min_radar = st.slider(
+                    "Min Radar Score",
+                    min_value=0,
+                    max_value=100,
+                    value=80,
+                    help="Minimum Radar Score (0-100). 80+ = Perfect Trade candidate"
+                )
+            
+            # Apply Filters
+            filtered = df_scan[
+                (df_scan['WC/TX%'] <= max_wc_tx) &
+                (df_scan['Trade Conc.'] >= min_conc) &
+                (df_scan['Radar Score'] >= min_radar)
+            ].copy()
+            
+            # Display Metrics
+            st.markdown("### 📊 Results")
+            m1, m2, m3 = st.columns(3)
+            m1.metric("Total Scanned", len(df_scan))
+            m2.metric("Matched Filters", len(filtered))
+            m3.metric("Match Rate", f"{(len(filtered)/len(df_scan)*100) if len(df_scan) > 0 else 0:.1f}%")
+            
+            if len(filtered) > 0:
+                # Sort by Radar Score descending
+                filtered = filtered.sort_values('Radar Score', ascending=False)
+                
+                # Display Table
+                st.markdown("### 🎯 Insider Candidates")
+                display_cols = ['Time', 'Market', 'Value', 'Wallet', 'WC/TX%', 'Trade Conc.', 'Radar Score', 'Urgency', 'Age']
+                
+                st.dataframe(
+                    filtered[display_cols],
+                    column_config={
+                        "Value": st.column_config.NumberColumn(format="$%d"),
+                        "Market": st.column_config.LinkColumn("Market"),
+                        "Wallet": st.column_config.TextColumn("Wallet", width="medium"),
+                        "WC/TX%": st.column_config.ProgressColumn("WC/TX% ⏱️", min_value=0, max_value=100, format="%.1f%%", help="Lower = More suspicious"),
+                        "Trade Conc.": st.column_config.ProgressColumn("Focus 🎯", min_value=0, max_value=100, format="%.0f%%"),
+                        "Radar Score": st.column_config.ProgressColumn("Radar 🎯", min_value=0, max_value=100, format="%.0f"),
+                        "Urgency": st.column_config.ProgressColumn("Urgency 🔥", min_value=0, max_value=100, format="%.0f"),
+                        "Age": st.column_config.TextColumn("Age"),
+                    },
+                    width='stretch',
+                    hide_index=True
+                )
+            else:
+                st.info("No results match your filter criteria. Try adjusting the sliders above.")
