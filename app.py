@@ -426,19 +426,19 @@ with tab_db:
             # Table
             st.markdown("### Recent Alerts")
             
-            # Add clickable links
-            df_db['Market_Link'] = df_db.apply(lambda row: f"https://polymarket.com/event/{row['slug']}", axis=1)
+            # Add clickable links - put URL in Market column itself
+            df_db['Market'] = df_db.apply(lambda row: f"https://polymarket.com/event/{row['slug']}", axis=1)
             
             # Formatting for display
-            display_db = df_db[['Time', 'value', 'side', 'outcome', 'price', 'market_name', 'Market_Link', 'wallet']].copy()
-            display_db.columns = ['Time', 'Value', 'Side', 'Outcome', 'Price', 'Market', 'Market_Link', 'Wallet']
+            display_db = df_db[['Time', 'value', 'side', 'outcome', 'price', 'Market', 'wallet']].copy()
+            display_db.columns = ['Time', 'Value', 'Side', 'Outcome', 'Price', 'Market', 'Wallet']
             
             st.dataframe(
                 display_db,
                 column_config={
                     "Value": st.column_config.NumberColumn(format="$%d"),
                     "Price": st.column_config.NumberColumn(format="%.2f"),
-                    "Market": st.column_config.LinkColumn("Market", display_text="Market"),
+                    "Market": st.column_config.LinkColumn("Market"),
                     "Wallet": st.column_config.TextColumn("Wallet", width="medium"),
                 },
                 width='stretch',
