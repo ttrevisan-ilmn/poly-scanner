@@ -129,7 +129,7 @@ with st.sidebar:
 
 st.title("Polymarket Whale Tracker 🐳")
 
-tab_live, tab_scan, tab_db, tab_smart = st.tabs(["📡 Live Monitor", "📜 Historical Scan", "💾 Database", "🧠 Smart Money"])
+tab_live, tab_scan, tab_db, tab_smart, tab_insider = st.tabs(["📡 Live Monitor", "📜 Historical Scan", "💾 Database", "🧠 Smart Money", "Insider Finder 🕵️"])
 
 # --- TAB 1: LIVE MONITOR ---
 with tab_live:
@@ -300,7 +300,8 @@ with tab_scan:
                                 "Bias": processed_item.get('bias', 0),
                                 "Liq/Vol": processed_item.get('liq_vol_ratio', 0),
                                 "WC/TX%": processed_item.get('wc_tx_pct', 100),
-                                "Trade Conc.": processed_item.get('trade_concentration', 0)
+                                "Trade Conc.": processed_item.get('trade_concentration', 0),
+                                "Radar Score": processed_item['profile'].get('profitability_score', 0)
                             })
                             
                     return results
@@ -508,3 +509,67 @@ with tab_smart:
                     st.warning("No recorded trades for this wallet in DB.")
             except Exception as e:
                 st.error(f"Error inspecting wallet: {e}")
+
+# --- TAB 5: INSIDER FINDER ---
+with tab_insider:
+    st.subheader("🕵️ Insider Finder")
+    st.info("Filter trades for suspicious 'Insider' behavior using advanced metrics.")
+
+    # 1. Filters
+    with st.expander("🔍 Filter Settings", expanded=True):
+        col_f1, col_f2, col_f3 = st.columns(3)
+        with col_f1:
+            wc_tx_filter = st.slider("Max WC/TX % (Time Delta)", 0, 100, 5, help="Time between wallet creation and trade. Lower = Sus.")
+        with col_f2:
+            conc_filter = st.slider("Min Trade Concentration %", 0, 100, 50, help="% of user volume in this specific market. Higher = Focused.")
+        with col_f3:
+            score_filter = st.slider("Min Radar Score", 0, 100, 80, help="Smart Money Score (Freshness + Focus + Speed).")
+
+    # 2. Data Processing
+    if st.session_state.scan_results:
+        df_insider = pd.DataFrame(st.session_state.scan_results)
+
+        # Ensure columns exist (handle empty or old state)
+        if "WC/TX%" in df_insider.columns and "Radar Score" in df_insider.columns:
+
+            # Apply Filters
+            # WC/TX% < Filter
+            # Trade Conc > Filter
+            # Radar Score > Filter
+
+            filtered_df = df_insider[
+                (df_insider["WC/TX%"] <= wc_tx_filter) &
+                (df_insider["Trade Conc."] >= conc_filter) &
+                (df_insider["Radar Score"] >= score_filter)
+            ]
+
+            st.metric("Suspects Found", len(filtered_df))
+
+            if not filtered_df.empty:
+                # Prepare Display
+                show_df = filtered_df[[
+                    "Wallet", "Market", "Value", "WC/TX%", "Trade Conc.", "Radar Score", "Link"
+                ]].copy()
+
+                # Sort by Radar Score desc
+                show_df = show_df.sort_values(by="Radar Score", ascending=False)
+
+                st.dataframe(
+                    show_df,
+                    column_config={
+                        "Value": st.column_config.NumberColumn(format="$%d"),
+                        "Market": st.column_config.LinkColumn("Market", display_text=".*"),
+                        "Link": st.column_config.LinkColumn("Link", display_text="View"),
+                        "WC/TX%": st.column_config.NumberColumn("WC/TX% ⏱️", format="%.1f%%", help="Wallet age when trade executed. <5% = Instant action!"),
+                        "Trade Conc.": st.column_config.ProgressColumn("Focus 🎯", min_value=0, max_value=100, format="%.0f%%"),
+                        "Radar Score": st.column_config.ProgressColumn("Radar Score 🚨", min_value=0, max_value=100, format="%.0f"),
+                    },
+                    width='stretch',
+                    hide_index=True
+                )
+            else:
+                st.info("No trades match these strict criteria. Try relaxing the filters.")
+        else:
+            st.warning("Data missing metrics. Please run a fresh Historical Scan first.")
+    else:
+        st.warning("⚠️ No data available. Please run a **Historical Scan** (Tab 2) to populate this view.")
