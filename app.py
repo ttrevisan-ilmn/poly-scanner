@@ -129,7 +129,7 @@ with st.sidebar:
 
 st.title("Polymarket Whale Tracker 🐳")
 
-tab_live, tab_scan, tab_db, tab_smart, tab_insider = st.tabs(["📡 Live Monitor", "📜 Historical Scan", "💾 Database", "🧠 Smart Money", "Insider Finder 🕵️"])
+tab_live, tab_scan, tab_db, tab_smart, tab_insider = st.tabs(["📡 Live Monitor", "📜 Historical Scan", "💾 Database", "🧠 Smart Money", "🕵️ Insider Finder"])
 
 # --- TAB 1: LIVE MONITOR ---
 with tab_live:
@@ -513,17 +513,18 @@ with tab_smart:
 # --- TAB 5: INSIDER FINDER ---
 with tab_insider:
     st.subheader("🕵️ Insider Finder")
-    st.info("Filter trades for suspicious 'Insider' behavior using advanced metrics.")
+    st.markdown("Filter trades for suspicious 'Insider' behavior using advanced metrics.")
 
-    # 1. Filters
-    with st.expander("🔍 Filter Settings", expanded=True):
-        col_f1, col_f2, col_f3 = st.columns(3)
-        with col_f1:
-            wc_tx_filter = st.slider("Max WC/TX % (Time Delta)", 0, 100, 5, help="Time between wallet creation and trade. Lower = Sus.")
-        with col_f2:
-            conc_filter = st.slider("Min Trade Concentration %", 0, 100, 50, help="% of user volume in this specific market. Higher = Focused.")
-        with col_f3:
-            score_filter = st.slider("Min Radar Score", 0, 100, 80, help="Smart Money Score (Freshness + Focus + Speed).")
+    st.markdown("### 🔍 Filter Criteria")
+    col_f1, col_f2, col_f3 = st.columns(3)
+    with col_f1:
+        wc_tx_filter = st.slider("Max WC/TX % (Time Delta)", 0, 100, 5, help="Time between wallet creation and trade. Lower = Sus.")
+    with col_f2:
+        conc_filter = st.slider("Min Trade Concentration %", 0, 100, 50, help="% of user volume in this specific market. Higher = Focused.")
+    with col_f3:
+        score_filter = st.slider("Min Radar Score", 0, 100, 80, help="Smart Money Score (Freshness + Focus + Speed).")
+
+    st.divider()
 
     # 2. Data Processing
     if st.session_state.scan_results:
@@ -533,22 +534,26 @@ with tab_insider:
         if "WC/TX%" in df_insider.columns and "Radar Score" in df_insider.columns:
 
             # Apply Filters
-            # WC/TX% < Filter
-            # Trade Conc > Filter
-            # Radar Score > Filter
-
             filtered_df = df_insider[
                 (df_insider["WC/TX%"] <= wc_tx_filter) &
                 (df_insider["Trade Conc."] >= conc_filter) &
                 (df_insider["Radar Score"] >= score_filter)
             ]
 
-            st.metric("Suspects Found", len(filtered_df))
+            # Metrics
+            total_count = len(df_insider)
+            match_count = len(filtered_df)
+            match_rate = (match_count / total_count * 100) if total_count > 0 else 0
+
+            m1, m2, m3 = st.columns(3)
+            m1.metric("Total Candidates", total_count)
+            m2.metric("Suspects Found", match_count)
+            m3.metric("Match Rate", f"{match_rate:.1f}%")
 
             if not filtered_df.empty:
                 # Prepare Display
                 show_df = filtered_df[[
-                    "Wallet", "Market", "Value", "WC/TX%", "Trade Conc.", "Radar Score", "Link"
+                    "Wallet", "Market", "Value", "Age", "Urgency", "WC/TX%", "Trade Conc.", "Radar Score", "Link"
                 ]].copy()
 
                 # Sort by Radar Score desc
@@ -560,9 +565,11 @@ with tab_insider:
                         "Value": st.column_config.NumberColumn(format="$%d"),
                         "Market": st.column_config.LinkColumn("Market", display_text=".*"),
                         "Link": st.column_config.LinkColumn("Link", display_text="View"),
+                        "Age": st.column_config.TextColumn("Age"),
+                        "Urgency": st.column_config.ProgressColumn("Urgency 🔥", min_value=0, max_value=100, format="%.0f"),
                         "WC/TX%": st.column_config.NumberColumn("WC/TX% ⏱️", format="%.1f%%", help="Wallet age when trade executed. <5% = Instant action!"),
                         "Trade Conc.": st.column_config.ProgressColumn("Focus 🎯", min_value=0, max_value=100, format="%.0f%%"),
-                        "Radar Score": st.column_config.ProgressColumn("Radar Score 🚨", min_value=0, max_value=100, format="%.0f"),
+                        "Radar Score": st.column_config.ProgressColumn("Radar Score 🎯", min_value=0, max_value=100, format="%.0f"),
                     },
                     width='stretch',
                     hide_index=True
