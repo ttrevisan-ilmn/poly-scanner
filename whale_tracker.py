@@ -262,6 +262,9 @@ class PolymarketTracker:
             # The Live Monitor prints immediately. Scan Mode prints via progress bar.
             # Let's do the DB part here and return the RICH object for printing.
             
+            # Calculate Metrics
+            metrics = self._calculate_advanced_metrics(market_data)
+            
             result_item = {
                 'time': time_str,
                 'market': market_data['title'],
@@ -269,7 +272,7 @@ class PolymarketTracker:
                 'outcome': outcome,
                 'wallet': wallet,
                 'fresh': profile['is_fresh'],
-                'age': profile.get('age_formatted', 'N/A'), # Propagate formatting
+                'age': profile.get('age_formatted', 'N/A'),
                 'slug': market_data['slug'],
                 'side': trade_data.get('side'),
                 'price': price,
@@ -277,7 +280,14 @@ class PolymarketTracker:
                 'asset_id': trade_data.get('asset_id'),
                 'profile': profile,
                 'vol_24h': float(market_data.get('volume24hr', 0)),
-                'liquidity': float(market_data.get('liquidityNum', 0)), # Note: API field is liquidityNum
+                'liquidity': float(market_data.get('liquidityNum', 0)),
+                
+                # Metrics
+                'spread': metrics['spread'],
+                'urgency': metrics['urgency'],
+                'bias': metrics['bias'],
+                'liq_vol_ratio': metrics['liq_vol_ratio'],
+                
                 '_ts': ts,
                 'end_date': market_data.get('end_date'),
                 'description': market_data.get('description'),
@@ -299,7 +309,13 @@ class PolymarketTracker:
                     'value': value_usd, 'side': trade_data.get('side'), 'outcome': outcome,
                     'price': price, 'market_id': trade_data.get('market_id')
                 }
-                m_info = {'title': market_data['title'], 'slug': market_data['slug'], 'volume24hr': market_data['volume24hr'], 'liquidity': market_data['liquidity']}
+                m_info = {
+                    'title': market_data['title'], 
+                    'slug': market_data['slug'], 
+                    'volume24hr': market_data.get('volume24hr', 0), 
+                    'liquidity': market_data.get('liquidityNum', 0),
+                    'metrics': metrics
+                }
                 self.send_discord_alert(t_event, m_info, profile, wallet, historical=False)
 
             return result_item
@@ -307,6 +323,70 @@ class PolymarketTracker:
         except Exception as e:
             print(f"Error processing whale: {e}")
             return None
+
+    def _calculate_advanced_metrics(self, market_data):
+        """
+        Calculates Polysights-style advanced metrics.
+        metrics: Spread %, Urgency, Bias, Liq/Vol
+        """
+        try:
+            liq = float(market_data.get('liquidityNum') or market_data.get('liquidity', 0))
+            vol = float(market_data.get('volume', 0)) or float(market_data.get('volume24hr', 0))
+            
+            # A. Implied Probability Bias: (YesPrice - 0.5) * 2
+            # Use outcomePrices if available
+            bias = 0.0
+            prices_str = market_data.get('outcomePrices', '[]')
+            try:
+                prices_list = json.loads(prices_str) if isinstance(prices_str, str) else prices_str
+                if prices_list:
+                    # Logic: If bias to Yes (>0.5), positive. If bias to No (<0.5), negative.
+                    # Usually [0] is Yes.
+                    yes_p = float(prices_list[0])
+                    bias = (yes_p - 0.5) * 2
+            except:
+                pass
+
+            # B. Liquidity-to-Volume Ratio
+            liq_vol_ratio = (liq / vol) if vol > 0 else 0.0
+            
+            # C. Resolution Urgency
+            # Formula: (TimeFactor*0.5) + (LiqFactor*0.2) + (VolFactor*0.2) + (PriceCertainty*0.1)
+            urgency = 0.0
+            try:
+                end_str = market_data.get('end_date') or market_data.get('endDate')
+                if end_str:
+                     end_dt = parser.isoparse(end_str).replace(tzinfo=datetime.timezone.utc)
+                     now_dt = datetime.datetime.now(datetime.timezone.utc)
+                     seconds_left = (end_dt - now_dt).total_seconds()
+                     
+                     if seconds_left <= 0: time_factor = 1.0 # 100%
+                     elif seconds_left > 2592000: time_factor = 0.1 # 10% base for far out
+                     else: time_factor = 1.0 - (seconds_left / 2592000)
+                     
+                     liq_factor = min(liq / 100000, 1.0)
+                     vol_factor = min(vol / 500000, 1.0)
+                     
+                     # Price Certainty
+                     try:
+                         prices_list = json.loads(prices_str) if isinstance(prices_str, str) else prices_str
+                         max_p = max([float(p) for p in prices_list]) if prices_list else 0.5
+                     except:
+                         max_p = 0.5
+                     price_certainty = max_p
+                     
+                     urgency = (time_factor * 50) + (liq_factor * 20) + (vol_factor * 20) + (price_certainty * 10)
+            except:
+                pass
+
+            return {
+                'spread': 0.0, # Placeholder
+                'urgency': float(urgency),
+                'bias': float(bias),
+                'liq_vol_ratio': float(liq_vol_ratio)
+            }
+        except Exception:
+            return {'spread': 0, 'urgency': 0, 'bias': 0, 'liq_vol_ratio': 0}
 
     def run_scan(self, limit=None, days=1.0, use_cache=True):
         print(f"[*] Starting Historical Scan (Last {days} Days)...")
@@ -358,7 +438,7 @@ class PolymarketTracker:
                     
                     if (time.time() - trade_time) > (days * 24 * 3600):
                         continue
-
+                        
                     # Found a whale!
                     wallet = trade.get('taker_address') or trade.get('maker_address') or trade.get('owner')
                     
@@ -830,7 +910,8 @@ class PolymarketTracker:
                            f"**Side:** {side_str}\n" 
                            f"**Outcome:** {trade_data['outcome']}\n"
                            f"**Price:** {trade_data['price']}\n"
-                           f"**Context:** Vol 24h: {vol_str} | Liq: {liq_str}\n"
+                            f"**Context:** Vol 24h: {vol_str} | Liq: {liq_str}\n"
+                           f"**Metrics:** Urgency: {market_data.get('metrics', {}).get('urgency', 0):.0f}% | Bias: {market_data.get('metrics', {}).get('bias', 0):.2f}\n"
                            f"**Time:** {time_pst}\n"
                            f"\n{profile_str}"
                            f"[View Market](https://polymarket.com/event/{market_data['slug']}) | [View Wallet](https://polymarket.com/profile/{wallet})",

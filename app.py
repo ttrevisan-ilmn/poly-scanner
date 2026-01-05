@@ -47,7 +47,10 @@ class StreamlitTracker(whale_tracker.PolymarketTracker):
             "Price": trade_data['price'],
             "Link": f"https://polymarket.com/event/{market_data['slug']}",
             "New User": "Yes" if profile_data.get('is_fresh') else "No",
-            "Age": profile_data.get('age_formatted', 'N/A')
+            "Age": profile_data.get('age_formatted', 'N/A'),
+            "Urgency": market_data.get('metrics', {}).get('urgency', 0),
+            "Bias": market_data.get('metrics', {}).get('bias', 0),
+            "Liq/Vol": market_data.get('metrics', {}).get('liq_vol_ratio', 0)
         }
         
         # Append to session state (thread-safeish in Streamlit context usually requires care, 
@@ -181,6 +184,7 @@ with tab_live:
                 with st.expander(f"Details: {whale['Outcome']} @ {whale['Price']}"):
                     st.write(f"Outcome: {whale['Outcome']}")
                     st.write(f"User Age: {whale.get('Age', 'N/A')} (Fresh: {whale['New User']})")
+                    st.write(f"🔥 Urgency: {whale.get('Urgency', 0):.0f}% | ⚖️ Bias: {whale.get('Bias', 0):.2f} | 🌊 Liq/Vol: {whale.get('Liq/Vol', 0):.2f}")
                 st.markdown("---")
     else:
         st.write("No whales found yet. Waiting for big splashes... 🌊")
@@ -284,7 +288,10 @@ with tab_scan:
                                 "_ts": processed_item['raw_timestamp'],
                                 "Link": f"https://polymarket.com/event/{processed_item.get('slug')}",
                                 "New User": "Yes" if processed_item['profile'].get('is_fresh') else "No",
-                                "Age": processed_item['age']
+                                "Age": processed_item['age'],
+                                "Urgency": processed_item.get('urgency', 0),
+                                "Bias": processed_item.get('bias', 0),
+                                "Liq/Vol": processed_item.get('liq_vol_ratio', 0)
                             })
                             
                     return results
@@ -353,6 +360,9 @@ with tab_scan:
                 "Liquidity": st.column_config.NumberColumn(format="$%d"),
                 "Market": st.column_config.TextColumn("Market", width="large"),
                 "Age": st.column_config.TextColumn("Age"),
+                "Urgency": st.column_config.ProgressColumn("Urgency 🔥", min_value=0, max_value=100, format="%.0f"),
+                "Bias": st.column_config.NumberColumn("Bias ⚖️", format="%.2f"),
+                "Liq/Vol": st.column_config.NumberColumn("Liq/Vol 🌊", format="%.2f"),
             },
             width='stretch',
             hide_index=True
