@@ -3,7 +3,9 @@ __pycache__/
 *$py.class
 *.so
 .DS_Store
+# Config & Secrets
 .env
+market_map.json
 venv/
 env/
 # Database

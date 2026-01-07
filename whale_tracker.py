@@ -21,11 +21,34 @@ from rich import print as rprint
 from rich.text import Text
 import database # Local DB for persistence
 
+from dotenv import load_dotenv
+
+# Load .env file if present (Local/Pi support)
+load_dotenv()
+
 console = Console()
 
-# --- CONFIGURATION ---
-# PASTE YOUR DISCORD WEBHOOK URL HERE
-DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1457494327394570314/BVpG5ZnG6QeeW5Wn04FzXTFBpC6kRztNy0u4nD2mLlbyDDg1OY1Z5IQPlb2yW4kztCb_"
+# --- CONFIGURATION & SECRETS ---
+def get_secret(key, default=None):
+    """
+    Fetch secret from environment (Pi/Local) OR Streamlit Secrets (Cloud).
+    Prioritizes Streamlit secrets if available.
+    """
+    # 1. Try Streamlit Secrets (Cloud)
+    try:
+        import streamlit as st
+        if key in st.secrets:
+            return st.secrets[key]
+    except (ImportError, FileNotFoundError, KeyError):
+        pass
+    
+    # 2. Try Environment Variable (Pi/Local .env)
+    return os.getenv(key, default)
+
+# SECRETS
+DISCORD_WEBHOOK_URL = get_secret("DISCORD_WEBHOOK_URL", "")
+
+# Note: If URL is empty, alerts will just be skipped safely.
 
 # THRESHOLDS
 MIN_TRADE_SIZE_USD = 6000.0
